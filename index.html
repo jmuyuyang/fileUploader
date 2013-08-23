@@ -1,0 +1,109 @@
+﻿<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head>
+    <style>
+        #container
+        {
+            border: 3px dotted #CCCCCC;
+        }
+        .rounded
+        {
+            border: 4px dotted #666699;
+        }
+    </style>
+    <script type="text/javascript" src="./client/jquery.js"></script>
+    <script type="text/javascript" src="./client/json2.js"></script>
+	<script type="text/javascript" src='./client/fileUploader.js'></script>
+    <script type="text/javascript" src='./client/md5.js'></script>
+	<script type="text/javascript" src="http://127.0.0.1:8000/socket.io/socket.io.js"></script>
+    <title></title>
+    <script type="text/javascript">
+        var channel;
+        var uploads = new Array();
+		
+		function connect(){
+			var socket = new JSONSocket("http://127.0.0.1",8080);
+			socket.connect();
+			return socket;
+		}
+
+        function addUploadItem(info) {
+            $('<div id="p_' + info.ID + '" class="easyui-progressbar" data-options="value:0" style="width:800px;"></div><br/>').appendTo($('#lstUpload'));
+            //$('#p_' + info.ID).progressbar({ value: 0, text: info.FileName });
+			setTimeout(function () { info.upload(channel, "initUpload"); }, 50);
+
+        }
+        function onFileOpen(files) {
+            if (files.length > 0) {
+                for (var i = 0; i < files.length; i++) {
+                    var info = new FileInfo(files[i], 32768);
+                    uploads.push(info);
+                    info.UploadProcess = onUploadProcess;
+                    addUploadItem(info);
+                }
+            }
+        }
+        function onUploadProcess(file) {
+           // $('#p_' + file.ID).progressbar({ value: (file.PageIndex / file.Pages) * 100,
+              //  text: file.FileName + '[' + file.UploadBytes + '/' + file.Size + ']'
+         //   });
+				console.log(file.PageIndex);
+        }
+        function onDragEnter(e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+
+        function onDragOver(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            $(dropbox).addClass('rounded');
+        }
+
+        function onDragLeave(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            $(dropbox).removeClass('rounded');
+        }
+
+        function onDrop(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            $(dropbox).removeClass('rounded');
+            var readFileSize = 0;
+            var files = e.dataTransfer.files;
+            if (files.length > 0) {
+                onFileOpen(files);
+            }
+
+        }
+        var dropbox;
+        $(document).ready(function () {
+			channel = connect();
+            dropbox = document.getElementById('container');
+			
+            // Setup drag and drop handlers.
+            dropbox.addEventListener('dragenter', onDragEnter, false);
+            dropbox.addEventListener('dragover', onDragOver, false);
+            dropbox.addEventListener('dragleave', onDragLeave, false);
+            dropbox.addEventListener('drop', onDrop, false);
+        });
+
+    </script>
+</head>
+<body>
+    <div id="container">
+        <div id="drop_it_like_its_hot" class="center linear">
+            <h2>
+                把需要上传的文件拖放进来</h2>
+            <span>( 可拖放多个)</span>
+        </div>
+        <hr />
+        <div id="lstUpload">
+        </div>
+    </div>
+    <p>
+        <span id="txtStatus"></span>
+    </p>
+</body>
+</html>
