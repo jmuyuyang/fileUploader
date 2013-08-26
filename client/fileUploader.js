@@ -46,7 +46,7 @@ JSONSocket.prototype.send = function(handler,data,callback){
 	this.socketIO.emit(handler,JSON.stringify(data));
 }
 
-function FileInfo(file, pagesize) {
+function fileUploader(file, pagesize) {
 	this._events = {};
 	this._socket = null;
 	this._uploadHandler = null;
@@ -60,7 +60,7 @@ function FileInfo(file, pagesize) {
     this.DataBuffer = null;
     this.UploadBytes = 0;
 	this.actionId = this.fileId();
-	this.pause = false;
+	this.pause = true;
     if (Math.floor(this.Size % this.PageSize) > 0) {
         this.Pages = Math.floor((this.Size / this.PageSize)) + 1;
     }else {
@@ -68,17 +68,12 @@ function FileInfo(file, pagesize) {
     }
 }
 
-FileInfo.prototype.fileId = function(){
+fileUploader.prototype.fileId = function(){
 	var filestr = this.FileName+"_"+this.Size+"_"+this.File.lastModifiedDate.getTime();
 	return hex_md5(filestr);
 }
 
-FileInfo.prototype.reset = function () {
-    this.PageIndex = 0;
-    this.UploadBytes = 0;
-}
-
-FileInfo.prototype.toBase64String = function () {
+fileUploader.prototype.encodeBuffer = function () {
     var binary = ''
     var bytes = new Uint8Array(this.DataBuffer)
     var len = bytes.byteLength;
@@ -89,101 +84,114 @@ FileInfo.prototype.toBase64String = function () {
     return window.btoa(binary);
 }
 
-FileInfo.prototype.packMsg = function(data){
+fileUploader.prototype.packMsg = function(data){
 	var obj = new Object();
 	obj.actionId = this.actionId;
 	obj.params = data;
 	return obj
 }
 
-FileInfo.prototype.onLoadData = function (evt) {
-    var obj = evt.target["tag"];
-    if (evt.target.readyState == FileReader.DONE) {
-        obj.DataBuffer = evt.target.result;
-		obj.emit('uploadData');
-    }
-    else {
-		obj.emit('uploadError',evt.target.error);
-    }
-}
-
-FileInfo.prototype.load = function () {
+fileUploader.prototype.load = function () {
     if (this.filereader == null || this.filereader == undefined)
         this.filereader = new FileReader();
     var reader = this.filereader;
     reader["tag"] = this;
-    reader.onloadend = this.onLoadData;
+    reader.onloadend = this.loadFileData;
     var count = this.Size - this.PageIndex * this.PageSize;
-    if (count > this.PageSize)
-       	count = this.PageSize;
+    if (count > this.PageSize) count = this.PageSize;
    	this.UploadBytes += count;
 	var blob = this.File.slice(this.PageIndex * this.PageSize, this.PageIndex * this.PageSize + count,this.File.type);
    	reader.readAsArrayBuffer(blob);
 };
 
-FileInfo.prototype.onUploadData = function () {
+fileUploader.prototype.loadFileData = function (evt) {
+    var obj = evt.target["tag"];
+    if (evt.target.readyState == FileReader.DONE) {
+        obj.DataBuffer = evt.target.result;
+		obj.emit('fileData');
+    }else {
+		obj.emit('error',evt.target.error);
+    }
+}
+
+fileUploader.prototype.uploadFileData = function () {
 	var file = this;
     var socket = file._socket;
 	if(!file._uploadHandler) return;
-	var data = file.packMsg({pageIndex: file.PageIndex + 1, fileData: file.toBase64String()});
+	var data = file.packMsg({pageIndex: file.PageIndex + 1, fileData: file.encodeBuffer()});
     socket.send(file._uploadHandler,data,function (result) {
-        if (result.status == "onProgress") {
-            file.PageIndex++;
-			file.emit("uploadProgress");
-            if (file.PageIndex < file.Pages) {
-                file.start();
-            }
-            if(file.pause) this.sync();
-        }else if(result.status == "Done"){
-			file.emit('uploadDone');
-		}else {
-			file.emit('uploadError',data.status);
-		}
+    	switch(result.status){
+    		case "onProgress":{
+    			file.PageIndex++;
+    			if(file.PageIndex < file.Pages){
+    				file.emit("progress");
+    				if(file.pause){
+    					file.sync();
+    				}else{
+    					file.load();
+    				}
+    				break;
+    			}
+    		}
+    		case "done":{
+    			file.emit("success");
+    			break;
+    		}
+    		case "error":{
+    			file.emit("error");
+    			break;
+    		}
+    	}
     });
 }
 
-FileInfo.prototype.upload = function (socket, handler) {
+fileUploader.prototype.upload = function (handler) {
     var fi = this;
-	fi._socket = socket;
 	var data = fi.packMsg({hash:fi.actionId,fileName:fi.FileName,fileSize:fi.Size,filePages:fi.Pages,pageSize:fi.PageSize});
-	socket.send(handler,data,function(result){
+	fi._socket.send(handler,data,function(result){
 		if(result.status == "error"){
-			fi.emit('uploadError',result.status);
+			fi.emit('error',result.status);
 		}else{
 			fi._uploadHandler = result.handler;
 			fi._uploadFileName = result.uploadFileName;
 			if(result.status == "onProgress"){
 				if(result.pageIndex > 0) fi.PageIndex = result.pageIndex;
 			}
-			fi.on('uploadData',fi.onUploadData);
-			fi.start();
+			fi.on('fileData',fi.uploadFileData);
+			fi.load();
 		}
 	});
 }
 
-FileInfo.prototype.start = function(handler){
-	if(handler) this._uploadHandler = handler;
-	if(!this.pause){
-		this.load();
+fileUploader.prototype.start = function(socket,handler){
+	this._socket = socket;
+	if(this.pause){
+		this.upload(handler);
+		this.pause = false;
 	}
 }
 
-FileInfo.prototype.pause = function(handler){
+fileUploader.prototype.stop = function(handler){
 	if(!this.pause){
+		this._stophandler = handler;
 		this.pause = true;
 	}
 }
 
-FileInfo.prototype.on = function(name,callback){
+fileUploader.prototype.on = function(name,callback){
 	var events = this._events[name] || (this._events[name] = []);
 	events.push(callback);
 	return this;
 }
 
-FileInfo.prototype.sync = function(){
+fileUploader.prototype.sync = function(){
+	var fi = this;
+	fi._socket.send(fi._stophandler,fi.packMsg({}),function(result){
+		fi.emit("pause",result);
+	});
 }
 
-FileInfo.prototype.emit = function(name){
+fileUploader.prototype.emit = function(name){
 	var args = Array.prototype.slice.call(arguments, 1);
 	if(events = this._events[name]){
 		for(var idx in events){

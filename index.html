@@ -15,14 +15,14 @@
     <script type="text/javascript" src="./client/json2.js"></script>
 	<script type="text/javascript" src='./client/fileUploader.js'></script>
     <script type="text/javascript" src='./client/md5.js'></script>
-	<script type="text/javascript" src="http://127.0.0.1:8000/socket.io/socket.io.js"></script>
+	<script type="text/javascript" src="http://192.168.83.210:8080/socket.io/socket.io.js"></script>
     <title></title>
     <script type="text/javascript">
         var channel;
         var uploads = new Array();
 		
 		function connect(){
-			var socket = new JSONSocket("http://127.0.0.1",8080);
+			var socket = new JSONSocket("http://192.168.83.210",8080);
 			socket.connect();
 			return socket;
 		}
@@ -30,25 +30,26 @@
         function addUploadItem(info) {
             $('<div id="p_' + info.ID + '" class="easyui-progressbar" data-options="value:0" style="width:800px;"></div><br/>').appendTo($('#lstUpload'));
             //$('#p_' + info.ID).progressbar({ value: 0, text: info.FileName });
-			setTimeout(function () { info.upload(channel, "initUpload"); }, 50);
-
+			setTimeout(function () { info.start(channel, "initUpload"); }, 50);
         }
         function onFileOpen(files) {
             if (files.length > 0) {
                 for (var i = 0; i < files.length; i++) {
-                    var info = new FileInfo(files[i], 32768);
+                    var info = new fileUploader(files[i], 32768);
                     uploads.push(info);
-                    info.UploadProcess = onUploadProcess;
+                    info.on("progress",onUploadProgress);
                     addUploadItem(info);
                 }
             }
         }
-        function onUploadProcess(file) {
+
+        function onUploadProgress() {
            // $('#p_' + file.ID).progressbar({ value: (file.PageIndex / file.Pages) * 100,
               //  text: file.FileName + '[' + file.UploadBytes + '/' + file.Size + ']'
          //   });
-				console.log(file.PageIndex);
+				console.log(this.PageIndex);
         }
+
         function onDragEnter(e) {
             e.stopPropagation();
             e.preventDefault();

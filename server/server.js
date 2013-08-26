@@ -1,4 +1,4 @@
-var sio = require("socket.io").listen(8000);
+var sio = require("socket.io").listen(8080);
 var uploader = require("./uploader");
 var logule = require("logule").init(module);
 
@@ -27,8 +27,11 @@ sio.on("connection",function(socket){
 	});
 
 	socket.on("stopUpload",function(data){
+		data = JSON.parse(data);
 		var fileUploader = fileInfo[data.actionId];
-		fileUploader.stop(null);
+		fileUploader.pause(function(){
+			socket.emit("message",JSON.stringify({actionId:data.actionId,params:{status:this.status}}));
+		});
 	})
 
 	socket.on("disconnect",function(){

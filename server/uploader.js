@@ -78,6 +78,7 @@ uploader.prototype.write = function(data,callback){
 	this.buf_list.push(buf);
 	if(this.pageIndex >= this.filePages){
 		this.sync();
+		this.removeProgress();
 		this.destroy();
 		this.status = "Done";
 	}else{
@@ -108,7 +109,12 @@ uploader.prototype.syncProgress = function(callback){
 		var f = path.resolve(this.uploadDir,this.uploadName+".dat");
 		var data = {hash:this.hash,fileName:this.fileName,uploadBytes:this.pageIndex * this.pageSize,uploadPages:this.pageIndex};
 		fs.writeFile(f,JSON.stringify(data),function(err){
-			if(callback) callback.apply(this,err);
+			if(err){
+				this.status = "error";
+			}else{
+				this.status = "pause";
+				if(callback) callback.apply(this,err);
+			}	
 		});
 	}
 }
@@ -123,12 +129,11 @@ uploader.prototype.removeProgress = function(){
 }
 
 uploader.prototype.destroy = function(){
-	if(this.stream){
-		if(this.buf_list.length > 0){
-			this.sync();
-		}
+	if(this.buf_list.length > 0){
+		this.sync();
+	}
+	if(this.stream) {
 		this.stream.end();
-		this.removeProgress();
 		this.stream = null;
 	}
 }
