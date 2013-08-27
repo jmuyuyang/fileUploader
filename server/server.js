@@ -2,9 +2,12 @@ var sio = require("socket.io").listen(8080);
 var uploader = require("./uploader");
 var logule = require("logule").init(module);
 
-var fileInfo = {};
+var clientList = [];
 sio.set('log level', 1);
 sio.on("connection",function(socket){
+	var socket_id = socket.id;
+	var fileInfo = {};
+	clientList[socket_id] = fileInfo;
 	socket.on('initUpload',function(data){
 		data = JSON.parse(data);
 		var fileUploader = new uploader(".");
@@ -29,7 +32,7 @@ sio.on("connection",function(socket){
 	socket.on("stopUpload",function(data){
 		data = JSON.parse(data);
 		var fileUploader = fileInfo[data.actionId];
-		fileUploader.pause(function(){
+		fileUploader.pause(function(err){
 			socket.emit("message",JSON.stringify({actionId:data.actionId,params:{status:this.status}}));
 		});
 	})

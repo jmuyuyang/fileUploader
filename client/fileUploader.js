@@ -121,7 +121,7 @@ fileUploader.prototype.uploadFileData = function () {
 	var data = file.packMsg({pageIndex: file.PageIndex + 1, fileData: file.encodeBuffer()});
     socket.send(file._uploadHandler,data,function (result) {
     	switch(result.status){
-    		case "onProgress":{
+    		case "progress":{
     			file.PageIndex++;
     			if(file.PageIndex < file.Pages){
     				file.emit("progress");
@@ -154,7 +154,7 @@ fileUploader.prototype.upload = function (handler) {
 		}else{
 			fi._uploadHandler = result.handler;
 			fi._uploadFileName = result.uploadFileName;
-			if(result.status == "onProgress"){
+			if(result.status == "progress"){
 				if(result.pageIndex > 0) fi.PageIndex = result.pageIndex;
 			}
 			fi.on('fileData',fi.uploadFileData);

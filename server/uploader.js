@@ -48,7 +48,7 @@ uploader.prototype.readPersistDat = function(callback){
 						var obj = JSON.parse(data);
 						up.fileName = obj.fileName;
 						up.pageIndex = obj.uploadPages;
-						up.status = "onProgress";
+						up.status = "progress";
 					}
 					callback.apply(up);			
 				});	
@@ -80,13 +80,13 @@ uploader.prototype.write = function(data,callback){
 		this.sync();
 		this.removeProgress();
 		this.destroy();
-		this.status = "Done";
+		this.status = "done";
 	}else{
 		if(this.pageIndex > 5){
 			this.sync();
 		}
-		if(this.status != "onProgress"){
-			this.status = "onProgress";
+		if(this.status != "progress"){
+			this.status = "progress";
 		}
 	}
 	callback.apply(this);
@@ -108,16 +108,32 @@ uploader.prototype.syncProgress = function(callback){
 	if(this.pageIndex < this.filePages){
 		var f = path.resolve(this.uploadDir,this.uploadName+".dat");
 		var data = {hash:this.hash,fileName:this.fileName,uploadBytes:this.pageIndex * this.pageSize,uploadPages:this.pageIndex};
+		var up = this;
 		fs.writeFile(f,JSON.stringify(data),function(err){
 			if(err){
-				this.status = "error";
+				up.status = "error";
 			}else{
-				this.status = "pause";
-				if(callback) callback.apply(this,err);
+				up.status = "pause";
 			}	
+			if(callback) callback.apply(up,err);
 		});
 	}
 }
+
+/*
+uploader.prototype.syncProgress = function(callback){
+	if(!this.redisClient) this.redisClient = redis.createClient();
+	var up = this;
+	this.redisClient.set(this.hash,JSON.stringify({fileName:this.fileName,uploadBytes:this.pageIndex * this.pageSize,uploadPages:this.pageIndex}),function(err,replies){
+		if(err){
+			up.status = "error";
+		}else{
+			up.status = "pause";
+		}
+		if(callback) callback.apply(up,err);
+	})
+}
+*/
 
 uploader.prototype.removeProgress = function(){
 	var f = path.resolve(this.uploadDir,this.uploadName+".dat");
