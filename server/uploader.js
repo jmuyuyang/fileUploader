@@ -1,8 +1,14 @@
 var fs = require("fs");
 var path = require('path');
 
-var uploader = function(uploadDir){
+var uploader = function(tmpDir,uploadDir,syncTimeRate){
+	this.tmpDir = tmpDir;
 	this.uploadDir = uploadDir;
+	if(syncTimeRate && syncTimeRate > 0){
+		this.syncTimeRate = syncTimeRate;
+	}else{
+		this.syncTimeRate = 0;
+	}
 }
 
 uploader.prototype.init = function(param,callback){
@@ -35,8 +41,8 @@ uploader.prototype.pause = function(callback){
 }
 
 uploader.prototype.readPersistDat = function(callback){
-	var datFile = path.resolve(this.uploadDir,this.uploadName+".dat");
-	var uploadFile = path.resolve(this.uploadDir,this.uploadName);
+	var datFile = path.resolve(this.tmpDir,this.uploadName+".dat");
+	var uploadFile = path.resolve(this.tmpDir,this.uploadName+".tmp");
 	var up = this;
 	if(fs.existsSync(uploadFile)){
 		fs.exists(datFile,function(exists){
@@ -63,7 +69,7 @@ uploader.prototype.readPersistDat = function(callback){
 }
 
 uploader.prototype.openStream = function(append){
-	var f = path.resolve(this.uploadDir,this.uploadName);
+	var f = path.resolve(this.tempDir,this.uploadName+".tmp");
 	if(append){
 		this.stream = fs.createWriteStream(f, {flags:"a",mode:0666});
 	}else{
@@ -78,18 +84,43 @@ uploader.prototype.write = function(data,callback){
 	this.buf_list.push(buf);
 	if(this.pageIndex >= this.filePages){
 		this.sync();
-		this.removeProgress();
 		this.destroy();
-		this.status = "done";
+		this.done(callback);
 	}else{
-		if(this.pageIndex > 5){
-			this.sync();
+		if(this.syncTimeRate > 0){
+			if(this.pageIndex % this.syncTimeRate == 0){
+				this.sync();
+			}
+		}else{
+			//default per 2 pages sync
+			if(this.pageIndex % 2 == 0){
+				this.sync();
+			}
 		}
+
 		if(this.status != "progress"){
 			this.status = "progress";
 		}
+		callback.apply(this);
 	}
-	callback.apply(this);
+}
+
+uploader.prototype.done = function(callback){
+	var up = this;
+	var tmpFile = path.join(this.tmpDir,this.uploadName+".tmp");
+	var uploadFile = path.join(this.uploadDir,this.uploadName);
+	fs.exists(tmpFile,function(exists){
+		if(exists){
+			fs.rename(tmpFile,uploadFile,function(err){
+				if(err) up.status = "error";
+				else{
+					up.status = "done";
+					up.removeProgress();
+					callback.apply(up);
+				}
+			})
+		}
+	})
 }
 
 uploader.prototype.sync = function(){
@@ -106,7 +137,7 @@ uploader.prototype.sync = function(){
 
 uploader.prototype.syncProgress = function(callback){
 	if(this.pageIndex < this.filePages){
-		var f = path.resolve(this.uploadDir,this.uploadName+".dat");
+		var f = path.resolve(this.tmpDir,this.uploadName+".dat");
 		var data = {hash:this.hash,fileName:this.fileName,uploadBytes:this.pageIndex * this.pageSize,uploadPages:this.pageIndex};
 		var up = this;
 		fs.writeFile(f,JSON.stringify(data),function(err){
@@ -136,7 +167,7 @@ uploader.prototype.syncProgress = function(callback){
 */
 
 uploader.prototype.removeProgress = function(){
-	var f = path.resolve(this.uploadDir,this.uploadName+".dat");
+	var f = path.resolve(this.tmpdDir,this.uploadName+".dat");
 	fs.exists(f,function(exists){
 		if(exists){
 			fs.unlinkSync(f);

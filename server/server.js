@@ -10,7 +10,7 @@ sio.on("connection",function(socket){
 	clientList[socket_id] = fileInfo;
 	socket.on('initUpload',function(data){
 		data = JSON.parse(data);
-		var fileUploader = new uploader(".");
+		var fileUploader = new uploader(".","../",5);
 		fileInfo[data.actionId] = fileUploader;
 		fileUploader.init(data.params,function(){
 			var ret = {handler:"uploadFile",status:this.status,uploadFileName:this.uploadName,pageIndex:this.pageIndex};
